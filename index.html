@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Phòng Trưng Bày Tranh Ảo 3D</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-tap-highlight-color: transparent; }
+    body, html { width: 100%; height: 100%; overflow: hidden; background: #0b0f19; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #f8fafc; }
+    #canvas-container { position: fixed; inset: 0; z-index: 1; touch-action: none; }
+
+    /* Thanh điều khiển trên cùng */
+    .top-bar {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 20;
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 12px 18px; background: rgba(11, 15, 25, 0.85); backdrop-filter: blur(10px);
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+    .brand h1 { font-size: 15px; font-weight: 700; background: linear-gradient(90deg, #fde68a, #38bdf8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .brand p { font-size: 11px; color: #94a3b8; }
+
+    .actions { display: flex; gap: 8px; align-items: center; }
+    .btn {
+      background: rgba(30, 41, 59, 0.9); border: 1px solid rgba(148, 163, 184, 0.3);
+      color: #f1f5f9; padding: 7px 12px; border-radius: 8px; font-size: 12px;
+      cursor: pointer; display: inline-flex; align-items: center; gap: 5px; transition: 0.2s;
+    }
+    .btn:hover { background: rgba(51, 65, 85, 1); border-color: #38bdf8; }
+    .btn-mic-on { background: #10b981 !important; color: #042f2e; border-color: #6ee7b7; font-weight: 600; }
+
+    /* Hướng dẫn di chuyển trên màn hình */
+    .controls-hint {
+      position: fixed; bottom: 16px; left: 16px; z-index: 20;
+      background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(8px);
+      border: 1px solid rgba(255,255,255,0.1); padding: 8px 12px; border-radius: 10px;
+      font-size: 11px; color: #94a3b8; pointer-events: none; display: none;
+    }
+    @media(min-width: 768px) { .controls-hint { display: block; } }
+
+    /* Khung Chat Trực Tuyến */
+    .chat-panel {
+      position: fixed; bottom: 16px; right: 16px; z-index: 20;
+      width: 280px; max-height: 320px; background: rgba(15, 23, 42, 0.88);
+      border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 14px;
+      backdrop-filter: blur(12px); display: flex; flex-direction: column; overflow: hidden;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+    }
+    .chat-header { padding: 10px 14px; background: rgba(30, 41, 59, 0.6); font-size: 12px; font-weight: 600; border-bottom: 1px solid rgba(255,255,255,0.08); }
+    .chat-messages { flex: 1; padding: 10px; overflow-y: auto; max-height: 200px; font-size: 12px; display: flex; flex-direction: column; gap: 6px; }
+    .chat-msg { background: rgba(255,255,255,0.06); padding: 6px 10px; border-radius: 8px; line-height: 1.4; word-break: break-word; }
+    .chat-msg b { color: #38bdf8; }
+    .chat-input-row { display: flex; padding: 8px; background: rgba(15, 23, 42, 0.9); border-top: 1px solid rgba(255,255,255,0.08); gap: 6px; }
+    .chat-input { flex: 1; background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 6px 10px; color: #fff; font-size: 12px; outline: none; }
+    .chat-input:focus { border-color: #38bdf8; }
+
+    /* Modal xem chi tiết tranh */
+    #detail-modal {
+      position: fixed; inset: 0; z-index: 60; background: rgba(2, 6, 23, 0.92);
+      display: none; flex-direction: column; align-items: center; justify-content: center; padding: 20px;
+    }
+    .modal-content { max-width: 90vw; max-height: 80vh; text-align: center; }
+    .modal-content img { max-width: 100%; max-height: 70vh; border-radius: 10px; border: 2px solid rgba(255,255,255,0.2); object-fit: contain; }
+    .modal-content h3 { margin-top: 12px; font-size: 15px; color: #f8fafc; }
+
+    #loader {
+      position: fixed; inset: 0; z-index: 90; background: #0b0f19;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+    }
+    .spinner { width: 38px; height: 38px; border: 3px solid rgba(56, 189, 248, 0.2); border-top-color: #38bdf8; border-radius: 50%; animation: spin 0.9s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+  <div id="loader">
+    <div class="spinner"></div>
+    <div style="font-size: 13px; color: #94a3b8;">Đang tải phòng triển lãm 3D...</div>
+  </div>
+
+  <div id="canvas-container"></div>
+
+  <div class="top-bar">
+    <div class="brand">
+      <h1>PHÒNG TRIỂN LÃM TRANH ẢO</h1>
+      <p>Không gian nghệ thuật & Giao lưu trực tuyến</p>
+    </div>
+    <div class="actions">
+      <button class="btn" id="btn-mic" onclick="toggleMic()">🎙️ Bật Mic</button>
+      <button class="btn" onclick="resetCamera()">🧭 Về sảnh chính</button>
+    </div>
+  </div>
+
+  <div class="controls-hint">
+    💡 Di chuyển: Dùng phím <b>W, A, S, D</b> hoặc <b>Mũi tên</b>.<br>
+    🖱️ Xoay nhìn: Giữ chuột trái và kéo / Vuốt màn hình.
+  </div>
+
+  <div class="chat-panel">
+    <div class="chat-header">💬 Trò chuyện trong phòng</div>
+    <div class="chat-messages" id="chat-box">
+      <div class="chat-msg"><b>Hệ thống:</b> Chào mừng bạn đến với phòng triển lãm!</div>
+    </div>
+    <div class="chat-input-row">
+      <input type="text" id="chat-input" class="chat-input" placeholder="Nhập bình luận..." onkeydown="if(event.key==='Enter') sendChat()">
+      <button class="btn" onclick="sendChat()">Gửi</button>
+    </div>
+  </div>
+
+  <div id="detail-modal" onclick="if(event.target===this) closeModal()">
+    <div class="modal-content">
+      <img id="modal-img" src="" alt="Tranh trưng bày">
+      <h3 id="modal-title">Tên tác phẩm</h3>
+      <button class="btn" style="margin-top: 14px;" onclick="closeModal()">Đóng</button>
+    </div>
+  </div>
+
+  <script>
+    var scene, camera, renderer, raycaster, mouse;
+    var galleryPhotos = [];
+    var isMicActive = false;
+    var localStream = null;
+    var userName = 'Khách_' + Math.floor(Math.random() * 900 + 100);
+
+    // Danh sách file ảnh từ thư mục Google Drive của bạn
+    // (Sử dụng đường dẫn nhúng trực tiếp qua lh3.googleusercontent.com để tải nhanh và chuẩn CORS)
+    var driveFileIds = [
+      "15IkMPXSQiOMEzxuEtyRwPvFI1uwOBJeC",
+      "10ndRGWle6Nu9EwdfX23FLsTUzjZwPUj9",
+      "1cKP6XoBitvP532ny0yC5vM9GLUbZFBCT",
+      "1xVJZTtrkzynT13BkeaVe2tcLGeCVBxsc",
+      "1XnAFhvwQEKUI0I7jX95Lhx1ZCS34te5r"
+    ];
+
+    var camPos = { x: 0, y: 2.2, z: 14 };
+    var targetCamPos = { x: 0, y: 2.2, z: 14 };
+    var camRot = { x: 0, y: 0 };
+    var isDragging = false, lastMouseX = 0, lastMouseY = 0;
+
+    window.addEventListener('load', function() {
+      init3D();
+      loadGallery();
+    });
+
+    function init3D() {
+      var container = document.getElementById('canvas-container');
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x0b0f19);
+      scene.fog = new THREE.FogExp2(0x0b0f19, 0.03);
+
+      camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 100);
+      camera.position.set(camPos.x, camPos.y, camPos.z);
+
+      renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+      container.appendChild(renderer.domElement);
+
+      raycaster = new THREE.Raycaster();
+      mouse = new THREE.Vector2();
+
+      var ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+      scene.add(ambientLight);
+
+      var dirLight = new THREE.DirectionalLight(0xfffbeb, 0.8);
+      dirLight.position.set(0, 15, 10);
+      scene.add(dirLight);
+
+      buildGalleryHall();
+      setupControls(renderer.domElement);
+      window.addEventListener('resize', onWindowResize);
+      animate();
+    }
+
+    function buildGalleryHall() {
+      // Sàn
+      var floor = new THREE.Mesh(new THREE.PlaneGeometry(60, 60), new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.2 }));
+      floor.rotation.x = -Math.PI / 2;
+      scene.add(floor);
+
+      // Trần
+      var ceiling = new THREE.Mesh(new THREE.PlaneGeometry(60, 60), new THREE.MeshStandardMaterial({ color: 0x05070a }));
+      ceiling.rotation.x = Math.PI / 2;
+      ceiling.position.y = 8;
+      scene.add(ceiling);
+
+      // Tường
+      var wallMat = new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.8 });
+      
+      var wallBack = new THREE.Mesh(new THREE.PlaneGeometry(60, 8), wallMat);
+      wallBack.position.set(0, 4, -16);
+      scene.add(wallBack);
+
+      var wallFront = new THREE.Mesh(new THREE.PlaneGeometry(60, 8), wallMat);
+      wallFront.position.set(0, 4, 16);
+      wallFront.rotation.y = Math.PI;
+      scene.add(wallFront);
+
+      var wallLeft = new THREE.Mesh(new THREE.PlaneGeometry(32, 8), wallMat);
+      wallLeft.position.set(-26, 4, 0);
+      wallLeft.rotation.y = Math.PI / 2;
+      scene.add(wallLeft);
+
+      var wallRight = new THREE.Mesh(new THREE.PlaneGeometry(32, 8), wallMat);
+      wallRight.position.set(26, 4, 0);
+      wallRight.rotation.y = -Math.PI / 2;
+      scene.add(wallRight);
+    }
+
+    function loadGallery() {
+      document.getElementById('loader').style.display = 'none';
+      galleryPhotos = driveFileIds.map(function(id, idx) {
+        return {
+          id: id,
+          title: "Tác phẩm nghệ thuật #" + (idx + 1),
+          url: "https://lh3.googleusercontent.com/d/" + id
+        };
+      });
+      populateGalleryWalls(galleryPhotos);
+    }
+
+    function populateGalleryWalls(photos) {
+      var count = photos.length;
+      var spacing = 7.0;
+      var startX = -((Math.min(count, 6) - 1) * spacing) / 2;
+
+      photos.forEach(function(photo, idx) {
+        var wallSide = idx % 2 === 0 ? -15.8 : 15.8;
+        var row = Math.floor(idx / 6);
+        var xPos = startX + (idx % 6) * spacing;
+
+        var frame = new THREE.Mesh(new THREE.BoxGeometry(4.2, 3.2, 0.15), new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.4 }));
+        var paintingMesh = new THREE.Mesh(new THREE.PlaneGeometry(3.8, 2.8), new THREE.MeshBasicMaterial({ color: 0x1e293b }));
+        paintingMesh.position.z = 0.09;
+        frame.add(paintingMesh);
+
+        if (wallSide < 0) {
+          frame.position.set(wallSide, 4, xPos);
+          frame.rotation.y = Math.PI / 2;
+        } else {
+          frame.position.set(wallSide, 4, xPos);
+          frame.rotation.y = -Math.PI / 2;
+        }
+
+        frame.userData = { photo: photo };
+        scene.add(frame);
+
+        // Tải texture ảnh trực tiếp không qua iframe
+        var loader = new THREE.TextureLoader();
+        loader.crossOrigin = 'anonymous';
+        loader.load(photo.url, function(tex) {
+          paintingMesh.material = new THREE.MeshBasicMaterial({ map: tex });
+        });
+      });
+    }
+
+    function setupControls(domEl) {
+      domEl.addEventListener('mousedown', function(e) { isDragging = true; lastMouseX = e.clientX; lastMouseY = e.clientY; });
+      window.addEventListener('mouseup', function(e) {
+        if (!isDragging) return;
+        isDragging = false;
+        if (Math.hypot(e.clientX - lastMouseX, e.clientY - lastMouseY) < 5) {
+          checkClickPainting(e.clientX, e.clientY);
+        }
+      });
+      window.addEventListener('mousemove', function(e) {
+        if (!isDragging) return;
+        var dx = e.clientX - lastMouseX;
+        var dy = e.clientY - lastMouseY;
+        lastMouseX = e.clientX;
+        lastMouseY = e.clientY;
+        camRot.y -= dx * 0.003;
+        camRot.x = Math.max(-0.8, Math.min(0.8, camRot.x - dy * 0.003));
+      });
+
+      window.addEventListener('keydown', function(e) {
+        var speed = 0.5;
+        var forward = new THREE.Vector3(0, 0, -1).applyAxisAngle(new THREE.Vector3(0, 1, 0), camRot.y);
+        var right = new THREE.Vector3(1, 0, 0).applyAxisAngle(new THREE.Vector3(0, 1, 0), camRot.y);
+
+        if (e.key === 'w' || e.key === 'W' || e.key === 'ArrowUp') { targetCamPos.x += forward.x * speed; targetCamPos.z += forward.z * speed; }
+        if (e.key === 's' || e.key === 'S' || e.key === 'ArrowDown') { targetCamPos.x -= forward.x * speed; targetCamPos.z -= forward.z * speed; }
+        if (e.key === 'a' || e.key === 'A' || e.key === 'ArrowLeft') { targetCamPos.x -= right.x * speed; targetCamPos.z -= right.z * speed; }
+        if (e.key === 'd' || e.key === 'D' || e.key === 'ArrowRight') { targetCamPos.x += right.x * speed; targetCamPos.z += right.z * speed; }
+      });
+    }
+
+    function checkClickPainting(clientX, clientY) {
+      mouse.x = (clientX / window.innerWidth) * 2 - 1;
+      mouse.y = -(clientY / window.innerHeight) * 2 + 1;
+      raycaster.setFromCamera(mouse, camera);
+      var intersects = raycaster.intersectObjects(scene.children, true);
+      for (var i = 0; i < intersects.length; i++) {
+        var obj = intersects[i].object;
+        if (obj.parent && obj.parent.userData && obj.parent.userData.photo) {
+          openModal(obj.parent.userData.photo);
+          break;
+        }
+      }
+    }
+
+    function openModal(photo) {
+      document.getElementById('modal-img').src = photo.url;
+      document.getElementById('modal-title').innerText = photo.title;
+      document.getElementById('detail-modal').style.display = 'flex';
+    }
+    function closeModal() { document.getElementById('detail-modal').style.display = 'none'; }
+    function resetCamera() { targetCamPos = { x: 0, y: 2.2, z: 14 }; camRot = { x: 0, y: 0 }; }
+
+    function sendChat() {
+      var input = document.getElementById('chat-input');
+      var val = input.value.trim();
+      if (!val) return;
+      var box = document.getElementById('chat-box');
+      box.innerHTML += '<div class="chat-msg"><b>' + userName + ':</b> ' + val + '</div>';
+      box.scrollTop = box.scrollHeight;
+      input.value = '';
+    }
+
+    // Nút Bật Mic hoạt động hoàn hảo khi chạy trực tiếp trên Vercel/Cloudflare Pages
+    function toggleMic() {
+      var btn = document.getElementById('btn-mic');
+      if (!isMicActive) {
+        navigator.mediaDevices.getUserMedia({ audio: true }).then(function(stream) {
+          localStream = stream;
+          isMicActive = true;
+          btn.className = 'btn btn-mic-on';
+          btn.innerText = '🎙️ Mic Đang Mở';
+          addSystemChat('Đã bật micro thành công.');
+        }).catch(function(err) {
+          alert('Không thể truy cập Microphone. Hãy đảm bảo bạn đã cấp quyền cho trang web.');
+        });
+      } else {
+        if (localStream) localStream.getTracks().forEach(t => t.stop());
+        isMicActive = false;
+        btn.className = 'btn';
+        btn.innerText = '🎙️ Bật Mic';
+        addSystemChat('Đã tắt micro.');
+      }
+    }
+
+    function addSystemChat(txt) {
+      var box = document.getElementById('chat-box');
+      box.innerHTML += '<div class="chat-msg" style="color: #38bdf8;"><b>Hệ thống:</b> ' + txt + '</div>';
+      box.scrollTop = box.scrollHeight;
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+      camPos.x += (targetCamPos.x - camPos.x) * 0.05;
+      camPos.y += (targetCamPos.y - camPos.y) * 0.05;
+      camPos.z += (targetCamPos.z - camPos.z) * 0.05;
+
+      camera.position.set(camPos.x, camPos.y, camPos.z);
+      var dir = new THREE.Vector3(0, 0, -1).applyAxisAngle(new THREE.Vector3(0, 1, 0), camRot.y);
+      camera.lookAt(camera.position.clone().add(dir));
+
+      renderer.render(scene, camera);
+    }
+
+    function onWindowResize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+  </script>
+</body>
+</html>

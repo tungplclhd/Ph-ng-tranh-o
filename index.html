@@ -202,12 +202,11 @@
     function loadGallery() {
       document.getElementById('loader').style.display = 'none';
       galleryPhotos = driveFileIds.map(function(id, idx) {
-        var rawUrl = "https://drive.google.com/thumbnail?id=" + id + "&sz=w1200";
         return {
           id: id,
           title: "Tác phẩm nghệ thuật #" + (idx + 1),
-          // Sử dụng dịch vụ Proxy ảnh trung gian để bypass lỗi CORS trên WebGL
-          url: "https://images.weserv.nl/?url=" + encodeURIComponent(rawUrl.replace('https://', ''))
+          // Sử dụng endpoint phân phối nội dung trực tiếp của Google
+          url: "https://lh3.googleusercontent.com/d/" + id
         };
       });
       populateGalleryWalls(galleryPhotos);

@@ -10,7 +10,6 @@
     body, html { width: 100%; height: 100%; overflow: hidden; background: #0b0f19; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #f8fafc; }
     #canvas-container { position: fixed; inset: 0; z-index: 1; touch-action: none; }
 
-    /* Thanh điều khiển trên cùng */
     .top-bar {
       position: fixed; top: 0; left: 0; right: 0; z-index: 20;
       display: flex; justify-content: space-between; align-items: center;
@@ -29,7 +28,6 @@
     .btn:hover { background: rgba(51, 65, 85, 1); border-color: #38bdf8; }
     .btn-mic-on { background: #10b981 !important; color: #042f2e; border-color: #6ee7b7; font-weight: 600; }
 
-    /* Hướng dẫn di chuyển trên màn hình */
     .controls-hint {
       position: fixed; bottom: 16px; left: 16px; z-index: 20;
       background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(8px);
@@ -38,7 +36,6 @@
     }
     @media(min-width: 768px) { .controls-hint { display: block; } }
 
-    /* Khung Chat Trực Tuyến */
     .chat-panel {
       position: fixed; bottom: 16px; right: 16px; z-index: 20;
       width: 280px; max-height: 320px; background: rgba(15, 23, 42, 0.88);
@@ -54,7 +51,6 @@
     .chat-input { flex: 1; background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 6px 10px; color: #fff; font-size: 12px; outline: none; }
     .chat-input:focus { border-color: #38bdf8; }
 
-    /* Modal xem chi tiết tranh */
     #detail-modal {
       position: fixed; inset: 0; z-index: 60; background: rgba(2, 6, 23, 0.92);
       display: none; flex-direction: column; align-items: center; justify-content: center; padding: 20px;
@@ -122,8 +118,7 @@
     var localStream = null;
     var userName = 'Khách_' + Math.floor(Math.random() * 900 + 100);
 
-    // Danh sách file ảnh từ thư mục Google Drive của bạn
-    // (Sử dụng đường dẫn nhúng trực tiếp qua lh3.googleusercontent.com để tải nhanh và chuẩn CORS)
+    // Danh sách ID ảnh từ thư mục Drive của bạn
     var driveFileIds = [
       "15IkMPXSQiOMEzxuEtyRwPvFI1uwOBJeC",
       "10ndRGWle6Nu9EwdfX23FLsTUzjZwPUj9",
@@ -173,18 +168,15 @@
     }
 
     function buildGalleryHall() {
-      // Sàn
       var floor = new THREE.Mesh(new THREE.PlaneGeometry(60, 60), new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.2 }));
       floor.rotation.x = -Math.PI / 2;
       scene.add(floor);
 
-      // Trần
       var ceiling = new THREE.Mesh(new THREE.PlaneGeometry(60, 60), new THREE.MeshStandardMaterial({ color: 0x05070a }));
       ceiling.rotation.x = Math.PI / 2;
       ceiling.position.y = 8;
       scene.add(ceiling);
 
-      // Tường
       var wallMat = new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.8 });
       
       var wallBack = new THREE.Mesh(new THREE.PlaneGeometry(60, 8), wallMat);
@@ -210,10 +202,12 @@
     function loadGallery() {
       document.getElementById('loader').style.display = 'none';
       galleryPhotos = driveFileIds.map(function(id, idx) {
+        var rawUrl = "https://drive.google.com/thumbnail?id=" + id + "&sz=w1200";
         return {
           id: id,
           title: "Tác phẩm nghệ thuật #" + (idx + 1),
-          url: "https://lh3.googleusercontent.com/d/" + id
+          // Sử dụng dịch vụ Proxy ảnh trung gian để bypass lỗi CORS trên WebGL
+          url: "https://images.weserv.nl/?url=" + encodeURIComponent(rawUrl.replace('https://', ''))
         };
       });
       populateGalleryWalls(galleryPhotos);
@@ -245,7 +239,6 @@
         frame.userData = { photo: photo };
         scene.add(frame);
 
-        // Tải texture ảnh trực tiếp không qua iframe
         var loader = new THREE.TextureLoader();
         loader.crossOrigin = 'anonymous';
         loader.load(photo.url, function(tex) {
@@ -317,7 +310,6 @@
       input.value = '';
     }
 
-    // Nút Bật Mic hoạt động hoàn hảo khi chạy trực tiếp trên Vercel/Cloudflare Pages
     function toggleMic() {
       var btn = document.getElementById('btn-mic');
       if (!isMicActive) {
